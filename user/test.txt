@@ -1,0 +1,36 @@
+我退出了
+pid: 18255
+prime 2
+pid 18255 done
+pid: 18256
+prime 3
+pid: 18257
+prime 5
+pid 18256 done
+pid: 18258
+prime 7
+pid 18257 done
+pid: 18259
+prime 11
+pid 18258 done
+pid 18259 done
+pid: 18260
+prime 13
+pid 18260 done
+pid: 18261
+prime 17
+pid 18261 done
+pid: 18262
+prime 19
+pid 18262 done
+pid: 18263
+prime 23
+pid 18263 done
+pid: 18264
+prime 29
+pid 18264 done
+pid: 18265
+prime 31
+pid 18265 done
+pid: 18266
+pid 18266  我死了

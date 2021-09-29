@@ -14,8 +14,10 @@ main(int argc, char *argv[])
     exit(1);
   }
 
-  if (trace(atoi(argv[1])) < 0) {
-    fprintf(2, "%s: trace failed\n", argv[0]);
+  int value = 0;
+  if ((value = trace(atoi(argv[1])) < 0)) {
+
+    fprintf(2, "%s: trace failed value: %d\n", argv[0], value);
     exit(1);
   }
   

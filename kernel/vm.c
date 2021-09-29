@@ -39,21 +39,54 @@ kvminit()
   // map kernel text executable and read-only.
   kvmmap(KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
 
-  // map kernel data and the physical RAM we'll make use of.
-  kvmmap((uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
-
-  // map the trampoline for trap entry/exit to
-  // the highest virtual address in the kernel.
+  // map kernel data and the phy    return 0; in the kernel.
   kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
 }
 
+// used for porc to have a kernel pagetable
+// same as kvminit
+pagetable_t proc_kvminit()
+{
+  pagetable_t proc_kernel_pagetable = (pagetable_t) kalloc();
+  if(proc_kernel_pagetable == (pagetable_t)0)
+    return 0;
+  memset(proc_kernel_pagetable, 0, PGSIZE);
+
+  // uart registers
+  proc_kvmmap(proc_kernel_pagetable,UART0, UART0, PGSIZE, PTE_R | PTE_W);
+
+  // virtio mmio disk interface
+  proc_kvmmap(proc_kernel_pagetable, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+
+  // CLINT
+  proc_kvmmap(proc_kernel_pagetable, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+
+  // PLIC
+  proc_kvmmap(proc_kernel_pagetable, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+
+  // map kernel text executable and read-only.
+  proc_kvmmap(proc_kernel_pagetable, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+
+  // map kernel data and the physical RAM we'll make use of.
+  proc_kvmmap(proc_kernel_pagetable, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+
+  // map the trampoline for trap entry/exit to
+  // the highest virtual address in the kernel.
+  proc_kvmmap(proc_kernel_pagetable, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+  return proc_kernel_pagetable;
+}
 // Switch h/w page table register to the kernel's page table,
 // and enable paging.
 void
 kvminithart()
 {
+  printf("%p", MAKE_SATP(kernel_pagetable));
   w_satp(MAKE_SATP(kernel_pagetable));
+  printf("out1");
   sfence_vma();
+  printf("out");
+  printf("outouto");
+  
 }
 
 // Return the address of the PTE in page table pagetable
@@ -119,6 +152,15 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
 {
   if(mappages(kernel_pagetable, va, sz, pa, perm) != 0)
     panic("kvmmap");
+}
+
+// used for proc_kvminit
+// same as kvmmp
+void
+proc_kvmmap(pagetable_t proc_kernel_pagetable,uint64 va, uint64 pa, uint64 sz, int perm)
+{
+  if(mappages(proc_kernel_pagetable, va, sz, pa, perm) != 0)
+    panic("proc_kvmmap");
 }
 
 // translate a kernel virtual address to
@@ -289,6 +331,23 @@ freewalk(pagetable_t pagetable)
   kfree((void*)pagetable);
 }
 
+void
+proc_freewalk(pagetable_t pagetable)
+{
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      freewalk((pagetable_t)child);
+      pagetable[i] = 0;
+    }
+  }
+  kfree((void*)pagetable);
+}
+
+
 // Free user memory pages,
 // then free page-table pages.
 void
@@ -438,5 +497,35 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return 0;
   } else {
     return -1;
+  }
+}
+
+//print ptes and pas from a pagetable
+void
+vmprint(pagetable_t pagetable)
+{
+  printf("page table %p\n", pagetable);
+  __vmprint_tool(pagetable, 1);
+}
+
+
+// a tool function for vmprint
+void
+__vmprint_tool(pagetable_t pagetable, int depth)
+{
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) == 0)
+      continue;
+    for(int j = 0; j < depth; j++)
+    {
+        if(j != 0)
+          printf(" ");
+        printf("..");
+    }
+    printf("%d: pte %p pa %p\n", i, pte, PTE2PA(pte));
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0) {
+      __vmprint_tool((pagetable_t) PTE2PA(pte), depth + 1);
+    }
   }
 }

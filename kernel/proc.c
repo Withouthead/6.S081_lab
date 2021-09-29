@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -121,6 +122,23 @@ found:
     return 0;
   }
 
+  p->kernel_pagetable = proc_kvminit();
+  if(p->kernel_pagetable == 0)
+  {
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  // Allocate a page for the process's own kernel stack(p->kernel_pagetable).
+  // Map it high in memory, followed by an invalid
+  // guard page.
+  initlock(&p->lock, "proc");
+  char *pa = kalloc();
+  if(pa == 0)
+    panic("allocporc: kalloc");
+  uint64 va = KSTACK(0);
+  proc_kvmmap(p->kernel_pagetable ,va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  p->kstack = va;
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -141,6 +159,15 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->kstack)
+  {
+    pte_t * pte = walk(p->pagetable, p->kstack, 0);
+    if(pte == 0)
+      panic("freeproc: don't exist kstack pa");
+    kfree((void *)PTE2PA(*pte));
+  }
+  if(p->kernel_pagetable)//TODO: unsure!
+    proc_freewalk(p->kernel_pagetable);
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -456,6 +483,7 @@ wait(uint64 addr)
 void
 scheduler(void)
 {
+  printf("come in");
   struct proc *p;
   struct cpu *c = mycpu();
   
@@ -471,14 +499,16 @@ scheduler(void)
         // Switch to chosen process.  It is the process's job
         // to release its lock and then reacquire it
         // before jumping back to us.
+
+        w_satp(MAKE_SATP(p->kernel_pagetable));//change the satp register to current process kernel pagetable 
+        sfence_vma();
         p->state = RUNNING;
         c->proc = p;
         swtch(&c->context, &p->context);
-
+        
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
-
         found = 1;
       }
       release(&p->lock);
@@ -486,6 +516,7 @@ scheduler(void)
 #if !defined (LAB_FS)
     if(found == 0) {
       intr_on();
+      kvminithart();
       asm volatile("wfi");
     }
 #else

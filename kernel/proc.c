@@ -38,9 +38,11 @@ procinit(void)
       char *pa = kalloc();
       if(pa == 0)
         panic("kalloc");
+      
       uint64 va = KSTACK((int) (p - proc));
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
+      p->kstack_pa = (uint64)pa;
   }
   kvminithart();
 }
@@ -132,13 +134,17 @@ found:
   // Allocate a page for the process's own kernel stack(p->kernel_pagetable).
   // Map it high in memory, followed by an invalid
   // guard page.
-  initlock(&p->lock, "proc");
-  char *pa = kalloc();
+  //initlock(&p->lock, "proc");
+  uint64 va = p->kstack;
+  uint64 pa = p->kstack_pa;
   if(pa == 0)
-    panic("allocporc: kalloc");
-  uint64 va = KSTACK(0);
+  {
+    printf("%p", va);
+    panic("allocproc: invalid pa\n");
+  }
+  printf("%p\n", pa);
+  //va = KSTACK(0);
   proc_kvmmap(p->kernel_pagetable ,va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-  p->kstack = va;
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -159,15 +165,20 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
-  if(p->kstack)
-  {
-    pte_t * pte = walk(p->pagetable, p->kstack, 0);
-    if(pte == 0)
-      panic("freeproc: don't exist kstack pa");
-    kfree((void *)PTE2PA(*pte));
-  }
-  if(p->kernel_pagetable)//TODO: unsure!
+  
+  //printf("freeproc\n");
+  // if(p->kstack)
+  // {
+  //   pte_t * pte = walk(p->kernel_pagetable, p->kstack, 0);
+    
+  //   if(pte == 0)
+  //     panic("freeproc: don't exist kstack pa");
+  //   kfree((void *)PTE2PA(*pte));
+  // }
+  //printf("out\n");
+  if(p->kernel_pagetable)//TODO: unsure!, needing to understand this, I dont know why it can work?
     proc_freewalk(p->kernel_pagetable);
+  printf("walk out\n");
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -258,6 +269,7 @@ userinit(void)
   p->state = RUNNABLE;
 
   release(&p->lock);
+  printf("%d\n", p->lock);
 }
 
 // Grow or shrink user memory by n bytes.
@@ -483,7 +495,6 @@ wait(uint64 addr)
 void
 scheduler(void)
 {
-  printf("come in");
   struct proc *p;
   struct cpu *c = mycpu();
   
@@ -500,11 +511,13 @@ scheduler(void)
         // to release its lock and then reacquire it
         // before jumping back to us.
 
-        w_satp(MAKE_SATP(p->kernel_pagetable));//change the satp register to current process kernel pagetable 
-        sfence_vma();
+        
         p->state = RUNNING;
         c->proc = p;
+        w_satp(MAKE_SATP(p->kernel_pagetable));//change the satp register to current process kernel pagetable 
+        sfence_vma();
         swtch(&c->context, &p->context);
+        kvminithart();
         
         // Process is done running for now.
         // It should have changed its p->state before coming back.

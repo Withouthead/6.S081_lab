@@ -183,8 +183,10 @@ void            __vmprint_tool(pagetable_t, int);
 pagetable_t     proc_kvminit();
 void            proc_kvmmap(pagetable_t, uint64, uint64, uint64, int);
 void            proc_freewalk(pagetable_t);
-pte_t *   walk(pagetable_t, uint64, int);
+pte_t *         walk(pagetable_t, uint64, int);
+int             u2kvmcopy(pagetable_t, pagetable_t, uint64, uint64);
 extern pagetable_t kernel_pagetable;
+
 
 // plic.c
 void            plicinit(void);
@@ -211,6 +213,9 @@ void            statsinc(void);
 // sprintf.c
 int             snprintf(char*, int, char*, ...);
 
+//vmcopyin.c
+int             copyinstr_new(pagetable_t, char *, uint64, uint64);
+int             copyin_new(pagetable_t, char *, uint64, uint64);
 #ifdef LAB_NET
 // pci.c
 void            pci_init();
@@ -231,4 +236,6 @@ void            sockclose(struct sock *);
 int             sockread(struct sock *, uint64, int);
 int             sockwrite(struct sock *, uint64, int);
 void            sockrecvudp(struct mbuf*, uint32, uint16, uint16);
+
+
 #endif

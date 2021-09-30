@@ -267,7 +267,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
-
+  u2kvmcopy(p->pagetable, p->kernel_pagetable, 0, p->sz);
   release(&p->lock);
   printf("%d\n", p->lock);
 }
@@ -281,10 +281,12 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
+  uint old_sz = sz;
   if(n > 0){
-    if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+    if(sz + n  > PLIC || (sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) { // TODO: check whthere need PGROUNDUP
       return -1;
     }
+    u2kvmcopy(p->pagetable, p->kernel_pagetable, old_sz, sz);
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
@@ -312,6 +314,7 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+  
   np->sz = p->sz;
 
   np->parent = p;
@@ -327,6 +330,13 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+
+  // Copy user memory to its kernel pagetable
+  if(u2kvmcopy(np->pagetable, np->kernel_pagetable, 0, np->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 

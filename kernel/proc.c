@@ -178,7 +178,6 @@ freeproc(struct proc *p)
   //printf("out\n");
   if(p->kernel_pagetable)//TODO: unsure!, needing to understand this, I dont know why it can work?
     proc_freewalk(p->kernel_pagetable);
-  printf("walk out\n");
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;

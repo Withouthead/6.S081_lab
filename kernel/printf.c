@@ -142,7 +142,7 @@ void backtrace()
   printf("backtrace:\n");
   while(fp >= low && fp < hight)
   {
-    uint64 *fp_pointer = (uint64 *)fp;
+   //uint64 *fp_pointer = (uint64 *)fp;
     printf("%p\n", *(uint64 *)(fp - 8));
     fp = (*(uint64 *)(fp - 16));
   }

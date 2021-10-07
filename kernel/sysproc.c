@@ -96,3 +96,24 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64 sys_sigalarm(void)
+{
+  int siga_ticks;
+  uint64 siga_handler;
+  if(argint(0, &siga_ticks) < 0 || argaddr(1, &siga_handler) < 0)
+    return -1;
+  struct proc *p = myproc();
+  p->siga_handler = siga_handler;
+  p->siga_ticks = siga_ticks;
+  return 0;
+
+}
+uint64 sys_sigreturn(void)
+{
+  struct proc *p = myproc();
+  *(p->trapframe) = *(p->backup_trapframe);
+  p->ishandling = 0;
+  usertrapret();
+  return 0;
+}

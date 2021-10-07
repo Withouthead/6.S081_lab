@@ -78,7 +78,13 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
+  {
+    if(p->siga_ticks != 0)
+    {
+      p->ticks_sum ++;
+    }
     yield();
+  }
 
   usertrapret();
 }
@@ -115,8 +121,16 @@ usertrapret(void)
   x |= SSTATUS_SPIE; // enable interrupts in user mode
   w_sstatus(x);
 
+
+  if(p->siga_ticks != 0 && p->ishandling != 1&&p->ticks_sum == p->siga_ticks)
+  {
+    p->ticks_sum = 0;
+    *(p->backup_trapframe) = *(p->trapframe);
+    p->ishandling = 1;
+    w_sepc(p->siga_handler);
+  }
   // set S Exception Program Counter to the saved user pc.
-  w_sepc(p->trapframe->epc);
+  else w_sepc(p->trapframe->epc);
 
   // tell trampoline.S the user page table to switch to.
   uint64 satp = MAKE_SATP(p->pagetable);

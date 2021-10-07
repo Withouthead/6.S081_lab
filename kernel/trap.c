@@ -125,7 +125,7 @@ usertrapret(void)
   if(p->siga_ticks != 0 && p->ishandling != 1&&p->ticks_sum == p->siga_ticks)
   {
     p->ticks_sum = 0;
-    *(p->backup_trapframe) = *(p->trapframe);
+    p->backup_trapframe = *(p->trapframe);
     p->ishandling = 1;
     w_sepc(p->siga_handler);
   }

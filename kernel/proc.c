@@ -41,10 +41,7 @@ procinit(void)
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
 
-      p->siga_handler = 0;
-      p->siga_ticks = 0;
-      p->ticks_sum = 0;
-      p->ishandling = 0;
+
   }
   kvminithart();
 }
@@ -112,6 +109,10 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->ticks_sum = 0;
+  p->siga_handler = 0;
+  p->siga_ticks = 0;
+  p->ticks_sum = 0;
+  p->ishandling = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -119,10 +120,6 @@ found:
     return 0;
   }
 
-  if((p->backup_trapframe = (struct trapframe *)kalloc()) == 0){
-    release(&p->lock);
-    return 0;
-  }
 
   // An empty user page table.
   p->pagetable = proc_pagetable(p);

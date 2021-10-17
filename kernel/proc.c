@@ -418,12 +418,15 @@ wait(uint64 addr)
         if(np->state == ZOMBIE){
           // Found one.
           pid = np->pid;
+          //printf("in\n");
           if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
                                   sizeof(np->xstate)) < 0) {
+            
             release(&np->lock);
             release(&p->lock);
             return -1;
           }
+          //printf("out\n");
           freeproc(np);
           release(&np->lock);
           release(&p->lock);
@@ -691,4 +694,29 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+uint64
+lazy_uvmalloc(struct proc *p, uint64 va)
+{
+
+  if(va >= p->sz || va < PGROUNDDOWN(p->trapframe->sp || va >= p->trapframe->sp))
+  {
+    return 0;
+  }
+  pagetable_t pagetable = p->pagetable;
+  char *mem;
+  va = PGROUNDDOWN(va);
+  mem = kalloc();
+  if (mem == 0)
+  {
+    return 0;
+  }
+  memset(mem, 0, PGSIZE);
+  if (mappages(pagetable, va, PGSIZE, (uint64)mem, PTE_W | PTE_X | PTE_R | PTE_U) != 0)
+  {
+    kfree(mem);
+    return 0;
+  }
+  return 1;
 }

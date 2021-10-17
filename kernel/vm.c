@@ -5,7 +5,6 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
-
 /*
  * the kernel's page table.
  */
@@ -96,6 +95,7 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
 uint64
 walkaddr(pagetable_t pagetable, uint64 va)
 {
+  
   pte_t *pte;
   uint64 pa;
 
@@ -103,10 +103,18 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
 
   pte = walk(pagetable, va, 0);
-  if (pte == 0)
-    return 0;
-  if ((*pte & PTE_V) == 0)
-    return 0;
+  if (pte == 0 || (*pte & PTE_V) == 0)
+  {
+    
+    if(lazy_uvmalloc(myproc(), va) == 0)
+    {
+      return 0;
+    }
+    else
+    {
+      pte = walk(pagetable, va, 0);
+    }
+  }
   if ((*pte & PTE_U) == 0)
     return 0;
   pa = PTE2PA(*pte);
@@ -255,24 +263,7 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz)
   return newsz;
 }
 
-uint64
-lazy_uvmalloc(pagetable_t pagetable, uint64 va)
-{
-  char *mem;
-  va = PGROUNDDOWN(va);
-  mem = kalloc();
-  if (mem == 0)
-  {
-    return 0;
-  }
-  memset(mem, 0, PGSIZE);
-  if (mappages(pagetable, va, PGSIZE, (uint64)mem, PTE_W | PTE_X | PTE_R | PTE_U) != 0)
-  {
-    kfree(mem);
-    return 0;
-  }
-  return 1;
-}
+
 // Deallocate user pages to bring the process size from oldsz to
 // newsz.  oldsz and newsz need not be page-aligned, nor does newsz
 // need to be less than oldsz.  oldsz can be larger than the actual

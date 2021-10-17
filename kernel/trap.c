@@ -67,7 +67,7 @@ void usertrap(void)
   else if (scause == 13 || scause == 15)
   {
     uint64 va = r_stval();
-    if(va >= p->sz || va < PGROUNDDOWN(p->trapframe->sp) || lazy_uvmalloc(p->pagetable, va) == 0)
+    if(va >= p->sz || va < PGROUNDDOWN(p->trapframe->sp) || lazy_uvmalloc(p, va) == 0)
     {
       p->killed = 1;
     }

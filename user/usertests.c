@@ -2438,6 +2438,7 @@ sbrkbugs(char *s)
     exit(1);
   }
   if(pid == 0){
+    //printf("%d\n", getpid());
     int sz = (uint64) sbrk(0);
     // free all user memory; there used to be a bug that
     // would not adjust p->sz correctly in this case,

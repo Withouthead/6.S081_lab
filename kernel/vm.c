@@ -327,6 +327,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       kfree(mem);
       goto err;
     }
+    *pte = (*pte) & (~PTE_W);
+    pte_t *new_pte = walk(new, i, 0);
+    *new_pte = (*new_pte) & (~PTE_W);
   }
   return 0;
 

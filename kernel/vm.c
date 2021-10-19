@@ -18,6 +18,24 @@ extern char trampoline[]; // trampoline.S
 /*
  * create a direct-map page table for the kernel.
  */
+#define PTE_COW (1L << 8)
+#define COW_INDEX(pa) (pa >> 12)
+int pa_cow_count[PHYSTOP/PGSIZE];
+void set_cow_count(uint64 pa, int value)
+{
+  int pa_index = COW_INDEX(pa);
+  pa_cow_count[pa_index] = value;
+}
+void add_cow_count(uint64 pa, int value)
+{
+  int pa_index = COW_INDEX(pa);
+  pa_cow_count[pa_index] += value;
+}
+int get_cow_count(uint64 pa)
+{
+  int pa_index = COW_INDEX(pa);
+  return pa_cow_count[pa_index];
+}
 void
 kvminit()
 {
@@ -323,15 +341,49 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
       goto err;
     }
-    *pte = (*pte) & (~PTE_W);
+    *pte = ((*pte) & (~PTE_W)) | PTE_COW;
     pte_t *new_pte = walk(new, i, 0);
-    *new_pte = (*new_pte) & (~PTE_W);
+    *new_pte = ((*new_pte) & (~PTE_W)) | PTE_COW;
+    add_cow_count(pa, 1);
   }
   return 0;
 
  err:
   uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
+}
+
+int cow_copy(pagetable_t pagetable, uint64 va)
+{
+  va = PGROUNDDOWN(va);
+  pte_t *pte;
+  uint64 pa;
+  uint flags;
+
+  if ((pte = walk(pagetable, va, 0)) == 0)
+    panic("cow_uvmcopy: pte should exist");
+  if ((*pte & PTE_V) == 0)
+    panic("cow_uvmcopy: page not present");
+  pa = PTE2PA(*pte);
+  if(!(pa & PTE_COW))
+  {
+    panic("cow_uvmcopy: page not cow");
+  }
+  flags = PTE_FLAGS(*pte);
+  if (get_cow_count(pa) <= 1)
+  {
+    *pte = ((*pte) | (PTE_W)) & (~PTE_COW);
+    return 0;
+  }
+  char *mem = kalloc();
+  if (mem <= 0)
+    return -1;
+  
+  kfree((void *)pa);
+  memmove(mem, (void *)pa, PGSIZE);
+  uint64 new_pa = PA2PTE((uint64)mem);
+  *pte = ((new_pa | (PTE_W)) | flags) & (~PTE_COW);
+  return 0;
 }
 
 // mark a PTE invalid for user access.
@@ -360,6 +412,14 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
+    if((pa0 & PTE_COW))
+    {
+      if(cow_copy(pagetable, va0) < 0)
+      {
+        return -1;
+      }
+      pa0 = walkaddr(pagetable, va0);
+    }
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;

@@ -2170,7 +2170,9 @@ sbrkfail(char *s)
       for(;;) sleep(1000);
     }
     if(pids[i] != -1)
+    {
       read(fds[0], &scratch, 1);
+    }
   }
 
   // if those failed allocations freed up the pages they did allocate,

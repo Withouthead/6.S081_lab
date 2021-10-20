@@ -80,6 +80,7 @@ pipewrite(struct pipe *pi, uint64 addr, int n)
   char ch;
   struct proc *pr = myproc();
 
+  //printf("%d\n", pr->pid);
   acquire(&pi->lock);
   for(i = 0; i < n; i++){
     while(pi->nwrite == pi->nread + PIPESIZE){  //DOC: pipewrite-full
@@ -119,7 +120,9 @@ piperead(struct pipe *pi, uint64 addr, int n)
       break;
     ch = pi->data[pi->nread++ % PIPESIZE];
     if(copyout(pr->pagetable, addr + i, &ch, 1) == -1)
+    {
       break;
+    }
   }
   wakeup(&pi->nwrite);  //DOC: piperead-wakeup
   release(&pi->lock);

@@ -5,10 +5,11 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
-
+#include "spinlock.h"
 /*
  * the kernel's page table.
  */
+
 pagetable_t kernel_pagetable;
 
 extern char etext[];  // kernel.ld sets this to end of kernel code.
@@ -18,27 +19,14 @@ extern char trampoline[]; // trampoline.S
 /*
  * create a direct-map page table for the kernel.
  */
+
 #define PTE_COW (1L << 8)
 #define COW_INDEX(pa) (pa >> 12)
-int pa_cow_count[PHYSTOP/PGSIZE];
-void set_cow_count(uint64 pa, int value)
-{
-  int pa_index = COW_INDEX(pa);
-  pa_cow_count[pa_index] = value;
-}
-void add_cow_count(uint64 pa, int value)
-{
-  int pa_index = COW_INDEX(pa);
-  pa_cow_count[pa_index] += value;
-}
-int get_cow_count(uint64 pa)
-{
-  int pa_index = COW_INDEX(pa);
-  return pa_cow_count[pa_index];
-}
+
 void
 kvminit()
 {
+  
   kernel_pagetable = (pagetable_t) kalloc();
   memset(kernel_pagetable, 0, PGSIZE);
 
@@ -77,11 +65,8 @@ kvminithart()
 // Return the address of the PTE in page table pagetable
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page-table pages.
-//
-// The risc-v Sv39 scheme has three levels of page-table
-// pages. A page-table page contains 512 64-bit PTEs.
-// A 64-bit virtual address is split into five fields:
-//   39..63 -- must be zero.
+//_cow_count(pa, 1);
+    //release(&pa_lock.lock);-- must be zero.
 //   30..38 -- 9 bits of level-2 index.
 //   21..29 -- 9 bits of level-1 index.
 //   12..20 -- 9 bits of level-0 index.
@@ -341,10 +326,23 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
       goto err;
     }
+
     *pte = ((*pte) & (~PTE_W)) | PTE_COW;
     pte_t *new_pte = walk(new, i, 0);
     *new_pte = ((*new_pte) & (~PTE_W)) | PTE_COW;
+   // acquire(&pa_lock.lock);
     add_cow_count(pa, 1);
+    //release(&pa_lock.lock);
+    if(((*new_pte) & PTE_W) || ((*new_pte) & PTE_COW) == 0)
+    {
+      panic("uvmcopy: page PTE_W or PTE_COW wrong");
+    }
+    if(((*pte) & PTE_W) || ((*pte) & PTE_COW) == 0)
+    {
+      panic("uvmcopy: page PTE_W or PTE_COW wrong");
+    }
+    // printf("old pte: %p\n", *pte);
+    // printf("new pte: %p\n", *new_pte);
   }
   return 0;
 
@@ -359,30 +357,40 @@ int cow_copy(pagetable_t pagetable, uint64 va)
   pte_t *pte;
   uint64 pa;
   uint flags;
-
+  if(va >= MAXVA)
+      return -1;
   if ((pte = walk(pagetable, va, 0)) == 0)
     panic("cow_uvmcopy: pte should exist");
   if ((*pte & PTE_V) == 0)
     panic("cow_uvmcopy: page not present");
   pa = PTE2PA(*pte);
-  if(!(pa & PTE_COW))
+  if(((*pte) & PTE_COW) == 0)
   {
     panic("cow_uvmcopy: page not cow");
   }
   flags = PTE_FLAGS(*pte);
+  //acquire(&pa_lock.lock);
+  // if(get_cow_count(pa) <= 0)
+  // {
+  //   printf("cow_count = 0\n");
+  // }
   if (get_cow_count(pa) <= 1)
   {
     *pte = ((*pte) | (PTE_W)) & (~PTE_COW);
     return 0;
   }
+  //release(&pa_lock.lock);
   char *mem = kalloc();
   if (mem <= 0)
     return -1;
   
-  kfree((void *)pa);
+  
   memmove(mem, (void *)pa, PGSIZE);
+  kfree((void *)pa);
   uint64 new_pa = PA2PTE((uint64)mem);
   *pte = ((new_pa | (PTE_W)) | flags) & (~PTE_COW);
+  //printf("old pa: %p\n", pa);
+  //printf("new pa: %pa\n", new_pa);
   return 0;
 }
 
@@ -406,13 +414,18 @@ int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
   uint64 n, va0, pa0;
-
+  uint64 *pte;
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    if(va0 >= MAXVA)
+      return -1;
     pa0 = walkaddr(pagetable, va0);
+    pte = walk(pagetable, va0, 0);
+    if(pte == 0)
+      return -1;
     if(pa0 == 0)
       return -1;
-    if((pa0 & PTE_COW))
+    if(((*pte) & PTE_COW))
     {
       if(cow_copy(pagetable, va0) < 0)
       {

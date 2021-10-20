@@ -131,7 +131,7 @@ filetest()
   
   buf[0] = 99;
 
-  for(int i = 0; i < 4; i++){
+  for(int i = 0; i < 1; i++){
     if(pipe(fds) != 0){
       printf("pipe() failed\n");
       exit(-1);
@@ -143,7 +143,9 @@ filetest()
     }
     if(pid == 0){
       sleep(1);
-      if(read(fds[0], buf, sizeof(i)) != sizeof(i)){
+      int sz;
+      if((sz = read(fds[0], buf, sizeof(i)) != sizeof(i))){
+        printf("sz: %d, real_sz: %d\n", sz, sizeof(i));
         printf("error: read failed\n");
         exit(1);
       }
@@ -170,6 +172,7 @@ filetest()
   }
 
   if(buf[0] != 99){
+    printf("%d\n", buf[0]);
     printf("error: child overwrote parent\n");
     exit(1);
   }

@@ -14,11 +14,13 @@ struct barrier {
   int round;     // Barrier round
 } bstate;
 
+pthread_mutex_t lock;
 static void
 barrier_init(void)
 {
   assert(pthread_mutex_init(&bstate.barrier_mutex, NULL) == 0);
   assert(pthread_cond_init(&bstate.barrier_cond, NULL) == 0);
+  assert(pthread_mutex_init(&lock, NULL) == 0);
   bstate.nthread = 0;
 }
 
@@ -30,6 +32,25 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
+  pthread_mutex_lock(&bstate.barrier_mutex);
+  int temp_nthread = bstate.nthread;
+  if(temp_nthread + 1 == nthread)
+  {
+    
+    
+    bstate.nthread = 0;
+    bstate.round ++;
+    pthread_cond_broadcast(&bstate.barrier_cond);
+    pthread_mutex_unlock(&bstate.barrier_mutex);
+  }
+  else
+  {
+    
+    bstate.nthread ++;
+    
+    pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+    pthread_mutex_unlock(&bstate.barrier_mutex);
+  }
   
 }
 

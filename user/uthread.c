@@ -11,10 +11,29 @@
 #define MAX_THREAD  4
 
 
+struct context {
+  uint64 ra;
+  uint64 sp;
+
+  // callee-saved
+  uint64 s0;
+  uint64 s1;
+  uint64 s2;
+  uint64 s3;
+  uint64 s4;
+  uint64 s5;
+  uint64 s6;
+  uint64 s7;
+  uint64 s8;
+  uint64 s9;
+  uint64 s10;
+  uint64 s11;
+};
+
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
   int        state;             /* FREE, RUNNING, RUNNABLE */
-
+  struct context context;
 };
 struct thread all_thread[MAX_THREAD];
 struct thread *current_thread;
@@ -30,6 +49,7 @@ thread_init(void)
   // a RUNNABLE thread.
   current_thread = &all_thread[0];
   current_thread->state = RUNNING;
+  current_thread->context.sp = (uint64)(current_thread->stack + STACK_SIZE);;
 }
 
 void 
@@ -41,24 +61,30 @@ thread_schedule(void)
   next_thread = 0;
   t = current_thread + 1;
   for(int i = 0; i < MAX_THREAD; i++){
+    //printf("%d\n", (int)(t - all_thread));
+   // printf("state: %d\n", t->state);
     if(t >= all_thread + MAX_THREAD)
       t = all_thread;
     if(t->state == RUNNABLE) {
+      
       next_thread = t;
       break;
     }
     t = t + 1;
   }
-
+  
   if (next_thread == 0) {
     printf("thread_schedule: no runnable threads\n");
     exit(-1);
   }
 
   if (current_thread != next_thread) {         /* switch threads?  */
+    
     next_thread->state = RUNNING;
     t = current_thread;
     current_thread = next_thread;
+    
+    thread_switch((uint64)&t->context, (uint64)&next_thread->context);
     /* YOUR CODE HERE
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
@@ -76,6 +102,8 @@ thread_create(void (*func)())
     if (t->state == FREE) break;
   }
   t->state = RUNNABLE;
+  t->context.ra = (uint64)(*func);
+  t->context.sp = (uint64)(t->stack + STACK_SIZE);
   // YOUR CODE HERE
 }
 
@@ -92,6 +120,7 @@ volatile int a_n, b_n, c_n;
 void 
 thread_a(void)
 {
+  
   int i;
   printf("thread_a started\n");
   a_started = 1;
@@ -104,7 +133,6 @@ thread_a(void)
     thread_yield();
   }
   printf("thread_a: exit after %d\n", a_n);
-
   current_thread->state = FREE;
   thread_schedule();
 }

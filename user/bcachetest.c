@@ -95,6 +95,7 @@ test0()
 
   printf("start test0\n");
   for(int i = 0; i < NCHILD; i++){
+    // printf("running0...");
     dir[0] = '0' + i;
     mkdir(dir);
     if (chdir(dir) < 0) {
@@ -110,6 +111,7 @@ test0()
   }
   m = ntas(0);
   for(int i = 0; i < NCHILD; i++){
+    // printf("running1...");
     dir[0] = '0' + i;
     int pid = fork();
     if(pid < 0){

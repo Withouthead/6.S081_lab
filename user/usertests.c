@@ -2182,16 +2182,19 @@ kernmem(char *s)
   int pid;
 
   for(a = (char*)(KERNBASE); a < (char*) (KERNBASE+2000000); a += 50000){
+    
     pid = fork();
     if(pid < 0){
       printf("%s: fork failed\n", s);
       exit(1);
     }
+    
     if(pid == 0){
       printf("%s: oops could read %x = %x\n", s, a, *a);
       exit(1);
     }
     int xstatus;
+    
     wait(&xstatus);
     if(xstatus != -1)  // did kernel kill child?
       exit(1);

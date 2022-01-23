@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
 
 struct cpu cpus[NCPU];
 
@@ -283,6 +284,15 @@ fork(void)
   np->sz = p->sz;
 
   np->parent = p;
+  for(int i = 0; i < VMASIZE; i++)
+  {
+    // np->vma_list[i] = p->vma_list[i];
+    if(p->vma_list[i].used)
+    {
+      memmove(&np->vma_list[i],&p->vma_list[i],sizeof(struct vma)); 
+      filedup(np->vma_list[i].vm_file);
+    }
+  }
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -340,7 +350,7 @@ void
 exit(int status)
 {
   struct proc *p = myproc();
-
+  
   if(p == initproc)
     panic("init exiting");
 
@@ -350,6 +360,23 @@ exit(int status)
       struct file *f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
+    }
+  }
+  for(int i = 0; i < VMASIZE; i++)
+  {
+    if(p->vma_list[i].used)
+    {
+      struct vma *v = &p->vma_list[i];
+      int len = PGROUNDUP(v->size);
+      v->va_start = PGROUNDDOWN(v->va_start);
+      if(v->flag & MAP_SHARED)
+      {
+        filewrite_offset(v->vm_file, v->offet, v->va_start, len);
+        
+      }
+      int npage = len / PGSIZE;
+      uvmunmap(p->pagetable, v->va_start, npage, 0);
+      fileclose(v->vm_file);
     }
   }
 
@@ -700,4 +727,18 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+struct vma* find_free_vma(void)
+{
+  struct proc *p = myproc();
+    for(int i = 0; i < VMASIZE; i++)
+    {
+      if(!p->vma_list[i].used)
+      {
+        p->vma_list[i].used = 1;
+        return &(p->vma_list[i]);
+      }
+    }
+    return 0;
 }

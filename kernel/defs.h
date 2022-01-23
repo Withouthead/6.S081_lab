@@ -4,6 +4,7 @@ struct file;
 struct inode;
 struct pipe;
 struct proc;
+struct vma;
 struct spinlock;
 struct sleeplock;
 struct stat;
@@ -33,7 +34,7 @@ void            fileinit(void);
 int             fileread(struct file*, uint64, int n);
 int             filestat(struct file*, uint64 addr);
 int             filewrite(struct file*, uint64, int n);
-
+int             filewrite_offset(struct file *f, int offset, uint64 addr, int n);
 // fs.c
 void            fsinit(int);
 int             dirlink(struct inode*, char*, uint);
@@ -105,7 +106,7 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
-
+struct vma*     find_free_vma(void);
 // swtch.S
 void            swtch(struct context*, struct context*);
 
@@ -182,6 +183,8 @@ void            plic_complete(int);
 void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
-
+// sysfile.c
+int       argfd(int n, int *pfd, struct file **pf);
+struct file*     filedup(struct file *f);
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

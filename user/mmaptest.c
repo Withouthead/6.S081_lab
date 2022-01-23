@@ -167,8 +167,9 @@ mmap_test(void)
   // write the mapped memory.
   for (i = 0; i < PGSIZE*2; i++)
     p[i] = 'Z';
-
+    
   // unmap just the first two of three pages of mapped memory.
+  printf("p: %d\n", p);
   if (munmap(p, PGSIZE*2) == -1)
     err("munmap (3)");
   
@@ -185,7 +186,10 @@ mmap_test(void)
     if (read(fd, &b, 1) != 1)
       err("read (1)");
     if (b != 'Z')
+    {
+      printf("%c\n", b);
       err("file does not contain modifications");
+    }
   }
   if (close(fd) == -1)
     err("close");
